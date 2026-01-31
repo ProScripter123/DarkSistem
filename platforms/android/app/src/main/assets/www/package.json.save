@@ -1,0 +1,40 @@
+x{
+  "name": "darksystem-apk",
+  "displayName": "Dark System",
+  "version": "3.0.0",
+  "description": "Penetration Testing Toolkit APK",
+  "main": "index.js",
+  "scripts": {
+    "build": "cordova build android",
+    "build-release": "cordova build android --release",
+    "run": "cordova run android",
+    "emulate": "cordova emulate android",
+    "clean": "cordova clean"
+  },
+  "keywords": [
+    "pentesting",
+    "security",
+    "tools",
+    "ddos",
+    "osint"
+  ],
+  "author": "Dark Team",
+  "license": "MIT",
+  "dependencies": {
+    "cordova-android": "^12.0.0"
+  },
+  "cordova": {
+    "platforms": [
+      "android"
+    ],
+    "plugins": {
+      "cordova-plugin-whitelist": {},
+      "cordova-plugin-network-information": {},
+      "cordova-plugin-file": {},
+      "cordova-plugin-inappbrowser": {},
+      "cordova-plugin-dialogs": {},
+      "cordova-plugin-vibration": {},
+      "cordova-plugin-android-permissions": {}
+    }
+  }
+}
