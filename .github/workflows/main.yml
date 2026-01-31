@@ -1,4 +1,4 @@
-name: Build HTML to APK (Cordova Debug)
+name: Build Full Cordova App (Debug APK)
 
 on:
   push:
@@ -27,39 +27,33 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Prepare Platform
+      # Langkah ini memastikan semua folder (backend, dll) siap
+      - name: Prepare Project Files
         run: |
-          # Remove problematic legacy plugin
-          cordova plugin remove cordova-plugin-whitelist --silent || true
+          # Buat folder www jika belum ada
+          mkdir -p www
+          # Jika folder backend ada di root, pindahkan ke www agar ikut ter-build
+          if [ -d "backend" ]; then cp -r backend www/; fi
+          npm install
+
+      - name: Add Android Platform
+        run: |
           cordova platform add android
           cordova prepare android
 
       - name: Build Debug APK
-        # This environment variable is the most important part
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # 1. Force the runner to forget where Gradle 9.3 is
+          # Hapus Gradle sistem agar tidak bentrok (Penyebab XmlParser error)
           sudo rm -f /usr/local/bin/gradle
           sudo rm -f /usr/bin/gradle
           
-          # 2. Add the Android SDK tools to the PATH so Cordova can find them
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
-          
-          # 3. Build. Cordova will automatically download the correct SDK tools
-          # if they are missing, as long as it has access to the internet.
+          # Jalankan build
           cordova build android --verbose --device
-
-      - name: Verify APK output
-        run: |
-          echo "=== APK FILES ==="
-          find platforms/android/app/build/outputs/apk -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: FullApp-Debug
           path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
