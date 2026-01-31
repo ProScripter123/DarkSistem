@@ -20,6 +20,7 @@ jobs:
 
       - name: Install Android Build Tools
         run: |
+          # Mencari sdkmanager dan menginstal versi yang diminta Cordova
           SDK_MANAGER=$(find $ANDROID_HOME -name sdkmanager | head -n 1)
           echo "y" | $SDK_MANAGER --install "build-tools;33.0.2" "platforms;android-33"
 
@@ -33,12 +34,16 @@ jobs:
 
       - name: Clean and Prepare Cordova
         run: |
-          # Hapus plugin whitelist yang sering bentrok di v12 (sudah built-in)
+          # 1. Pastikan folder www ada
+          mkdir -p www
+          
+          # 2. Hapus plugin whitelist dari config.xml (Penyebab error XML di Cordova 12)
           sed -i '/cordova-plugin-whitelist/d' config.xml
           
-          # Hapus folder platform lama untuk memastikan XML di-generate ulang secara bersih
+          # 3. Hapus platform lama agar XML di-generate ulang dari nol (mencegah cache korup)
           rm -rf platforms/android
           
+          # 4. Tambah platform secara bersih
           cordova platform add android --nosave
           cordova prepare android
 
@@ -46,12 +51,16 @@ jobs:
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # Bypass Gradle 9.3 sistem
+          # 1. Bypass Gradle 9.3 bawaan GitHub (Penyebab error XmlParser)
+          # Kita download dan paksa PATH ke Gradle 8.7
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
           unzip -q /tmp/gradle-8.7-bin.zip -d /tmp/gradle-fixed
           export PATH=/tmp/gradle-fixed/gradle-8.7/bin:$PATH
           
-          # Jalankan build dengan flag --device agar lebih stabil
+          # 2. Verifikasi versi Gradle sebelum build
+          gradle -v
+          
+          # 3. Jalankan build utama
           cordova build android --verbose --device
 
       - name: Upload APK
