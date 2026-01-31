@@ -17,7 +17,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17 # JDK 17 is the requirement for modern Android builds
+          java-version: 17
 
       - name: Setup Android SDK
         run: |
@@ -34,18 +34,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # This step forces the project to use a compatible Gradle version
-      # by updating the wrapper before the main build runs.
-      - name: Prepare Cordova Platform
+      - name: Prepare Platform and Clean Plugins
         run: |
-          cordova platform add android || true
-          cd platforms/android
-          chmod +x gradlew
-          ./gradlew wrapper --gradle-version 8.7
+          # Remove whitelist plugin because it's built into Cordova-Android 12
+          cordova plugin remove cordova-plugin-whitelist --silent || true
+          # Add platform
+          cordova platform add android
+          # Run a 'prepare' to generate necessary files
+          cordova prepare android
 
       - name: Build Debug APK
-        # CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL forces Cordova to stop 
-        # using the system Gradle 9.3.0
+        # We pass the Gradle version directly through an Environment Variable 
+        # This bypasses the need to manually chmod 'gradlew' files
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: cordova build android --verbose --device
@@ -53,7 +53,7 @@ jobs:
       - name: Verify APK output
         run: |
           echo "=== APK FILES ==="
-          ls -R platforms/android/app/build/outputs/apk
+          find platforms/android/app/build/outputs/apk -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
