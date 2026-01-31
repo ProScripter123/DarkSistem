@@ -1,0 +1,144 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install Cordova
+      run: |
+        npm install -g cordova
+        cordova --version
+    
+    - name: Install dependencies
+      run: |
+        # Install Android SDK components
+        yes | sdkmanager --licenses
+        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+    
+    - name: Create Cordova project
+      run: |
+        cordova create darksystem-build com.darksystem.app "DarkSystem"
+        cd darksystem-build
+        cordova platform add android
+    
+    - name: Copy Dark System files
+      run: |
+        cd darksystem-build
+        # Copy all files from www directory
+        if [ -d "../www" ]; then
+          cp -r ../www/* www/
+        else
+          # If www doesn't exist, create minimal structure
+          mkdir -p www
+          echo '<html><body><h1>Dark System</h1></body></html>' > www/index.html
+        fi
+        
+        # Ensure icon exists
+        mkdir -p www/res/icon/android
+        if [ ! -f "www/res/icon/android/darksystem.jpg" ]; then
+          # Create placeholder icon
+          echo "Placeholder icon" > www/res/icon/android/darksystem.jpg
+        fi
+    
+    - name: Create config.xml
+      run: |
+        cd darksystem-build
+        cat > config.xml << 'EOF'
+        <?xml version='1.0' encoding='utf-8'?>
+        <widget id="com.darksystem.app" version="3.0.0">
+            <name>Dark System</name>
+            <description>Penetration Testing Toolkit</description>
+            <author>Dark Team</author>
+            <content src="index.html" />
+            <access origin="*" />
+            <allow-intent href="*" />
+            
+            <preference name="android-minSdkVersion" value="21" />
+            <preference name="android-targetSdkVersion" value="33" />
+            <preference name="Orientation" value="portrait" />
+            
+            <platform name="android">
+                <icon src="www/res/icon/android/darksystem.jpg" />
+                
+                <config-file parent="/manifest" target="AndroidManifest.xml">
+                    <uses-permission android:name="android.permission.INTERNET" />
+                    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+                    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+                    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+                    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+                </config-file>
+            </platform>
+        </widget>
+        EOF
+    
+    - name: Build Android APK (Debug)
+      run: |
+        cd darksystem-build
+        cordova build android --debug --verbose
+    
+    - name: Build Android APK (Release)
+      run: |
+        cd darksystem-build
+        cordova build android --release --verbose
+      continue-on-error: true  # Release build might need keystore
+    
+    - name: Upload APK artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: DarkSystem-APKs
+        path: |
+          darksystem-build/platforms/android/app/build/outputs/apk/debug/*.apk
+          darksystem-build/platforms/android/app/build/outputs/apk/release/*.apk
+        retention-days: 7
+    
+    - name: Create GitHub Release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          darksystem-build/platforms/android/app/build/outputs/apk/debug/*.apk
+          darksystem-build/platforms/android/app/build/outputs/apk/release/*.apk
+        body: |
+          # Dark System v3.0 APK
+          
+          ## Features
+          - DDoS Attack Tools (GET, POST, PUT, DELETE)
+          - OSINT Gathering
+          - WhatsApp Exploits
+          - Network Scanner
+          
+          ## Login
+          Username: `IENZ`
+          Password: `1122`
+          
+          ## Installation
+          1. Download APK
+          2. Enable "Unknown Sources" in Android Settings
+          3. Install and launch
+          
+          **For educational purposes only.**
