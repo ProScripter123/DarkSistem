@@ -1,121 +1,44 @@
-name: Build Dark System APK
+name: Build APK
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
     
-    - name: Setup environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y nodejs npm openjdk-17-jdk wget unzip
-    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        
     - name: Install Cordova
       run: npm install -g cordova
     
     - name: Create Cordova project
       run: |
-        cordova create darkapp com.darksystem.app "DarkSystem"
-        cd darkapp
+        cordova create myapp com.darksystem.app "DarkSystem"
+        cd myapp
         cordova platform add android
     
-    - name: Copy project files
+    - name: Copy files
       run: |
-        cd darkapp
-        rm -rf www/*
-        
-        # Copy www directory if exists
+        cd myapp
         if [ -d "../www" ]; then
           cp -r ../www/* www/
-        else
-          # Create minimal app
-          mkdir -p www
-          cat > www/index.html << 'HTML'
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dark System</title>
-    <style>
-        body { background: #000; color: #0f0; padding: 20px; font-family: monospace; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .login { background: #111; padding: 20px; margin: 20px 0; border: 2px solid #0f0; }
-        input, button { padding: 10px; margin: 5px; width: 100%; }
-        button { background: #0f0; color: #000; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>⚡ Dark System v3.0</h1>
-        <p>Built via GitHub Actions</p>
-        
-        <div class="login">
-            <h3>🔐 Login</h3>
-            <input type="text" value="IENZ" readonly>
-            <input type="password" value="1122" readonly>
-            <button onclick="login()">Login</button>
-        </div>
-        
-        <div>
-            <h3>🛠️ Features:</h3>
-            <p>• DDoS Attack Tools</p>
-            <p>• OSINT Gathering</p>
-            <p>• WhatsApp Exploits</p>
-            <p>• Network Scanner</p>
-        </div>
-        
-        <p style="color: #888; margin-top: 30px;">
-            GitHub: ProScripter123/DarkSistem
-        </p>
-    </div>
-    
-    <script>
-        function login() {
-            alert('Access Granted!\nUsername: IENZ\nPassword: 1122');
-        }
-    </script>
-</body>
-</html>
-HTML
         fi
     
-    - name: Create minimal config.xml
+    - name: Build
       run: |
-        cd darkapp
-        
-        cat > config.xml << 'XML'
-<?xml version='1.0' encoding='utf-8'?>
-<widget id="com.darksystem.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
-    <name>DarkSystem</name>
-    <description>Security Tools</description>
-    <author>Dark Team</author>
-    <content src="index.html" />
-    <access origin="*" />
-    <preference name="android-minSdkVersion" value="21" />
-</widget>
-XML
-    
-    - name: Add whitelist plugin
-      run: |
-        cd darkapp
-        cordova plugin add cordova-plugin-whitelist
-    
-    - name: Build APK
-      run: |
-        cd darkapp
-        cordova build android --debug
+        cd myapp
+        cordova build android
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: DarkSystem-APK
-        path: darkapp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+        path: myapp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
