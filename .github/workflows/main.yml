@@ -19,12 +19,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
+      - name: Install Android SDK Components
         run: |
-          # We use a wildcard/find approach to locate sdkmanager regardless of the runner's exact folder structure
-          SDK_MANAGER=$(find $ANDROID_HOME -name sdkmanager | head -n 1)
-          echo "Using sdkmanager at: $SDK_MANAGER"
-          echo "y" | $SDK_MANAGER --install "build-tools;33.0.2" "platforms;android-33"
+          # Use the pre-installed sdkmanager more reliably
+          yes | sdkmanager --install "build-tools;33.0.2" "platforms;android-33"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,21 +35,25 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prepare Platform
+      - name: Prepare Cordova Platform
         run: |
-          # Remove legacy plugin and fresh add the platform
           cordova plugin remove cordova-plugin-whitelist --silent || true
           cordova platform add android
           cordova prepare android
 
       - name: Build Debug APK
+        # We use 'env' to set the version AND a script to nuke the system Gradle
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # 1. Hide the system Gradle 9.3 from the PATH
+          # 1. KILL the system Gradle so it can't hijack the build
+          sudo rm -rf /usr/bin/gradle
+          sudo rm -rf /usr/share/gradle*
+          
+          # 2. Ensure PATH is clean
           export PATH=$(echo $PATH | tr ':' '\n' | grep -v "gradle" | tr '\n' ':')
           
-          # 2. Build using the wrapper Cordova creates
+          # 3. Force the build
           cordova build android --verbose --device
 
       - name: Verify APK output
