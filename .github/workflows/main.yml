@@ -31,15 +31,13 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Prepare Project
+      - name: Prepare Cordova Project
         run: |
-          # Hapus plugin whitelist yang bermasalah (sudah built-in di v12)
+          # 1. Hapus plugin whitelist (sudah built-in di Cordova-Android 12)
+          # Plugin ini sering menyebabkan error 'Unbound' di XML jika versinya lama
           sed -i '/cordova-plugin-whitelist/d' config.xml
           
-          # Buat folder www jika belum ada & pindahkan backend
-          mkdir -p www
-          if [ -d "backend" ]; then cp -r backend www/; fi
-          
+          # 2. Tambahkan platform
           cordova platform add android --nosave
           cordova prepare android
 
@@ -47,15 +45,16 @@ jobs:
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # Bypass Gradle 9.3 sistem
+          # Bypass Gradle 9.3 bawaan GitHub
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
           unzip -q /tmp/gradle-8.7-bin.zip -d /tmp/gradle-fixed
           export PATH=/tmp/gradle-fixed/gradle-8.7/bin:$PATH
           
+          # Jalankan Build
           cordova build android --verbose --device
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DarkSystem-App
+          name: DarkSystem-App-Debug
           path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
