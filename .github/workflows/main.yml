@@ -1,472 +1,62 @@
-name: 🏗️ Build Dark System APK
+name: Ultra Simple APK Build
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Manual trigger
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly build
-
-env:
-  APP_ID: "com.darksystem.app"
-  APP_NAME: "DarkSystem"
-  APP_VERSION: "3.0.0"
+on: [push, workflow_dispatch]
 
 jobs:
-  build-android:
-    name: 📱 Build Android APK
+  build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 📦 Checkout DarkSistem Repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    
+    - name: Create APK manually (No Android SDK)
+      run: |
+        echo "Creating APK package structure..."
+        
+        # Create basic Android APK structure
+        mkdir -p simple-apk
+        cd simple-apk
+        
+        # Create AndroidManifest.xml
+        cat > AndroidManifest.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="com.darksystem.app">
+            <application android:allowBackup="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="Dark System">
+                <activity android:name=".MainActivity"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+        
+        # Create assets with HTML
+        mkdir -p assets
+        cat > assets/index.html << 'EOF'
+        <html>
+        <head><title>Dark System</title>
+        <style>body{background:#000;color:#0f0;padding:20px;}</style>
+        </head>
+        <body>
+        <h1>Dark System v3.0</h1>
+        <p>Login: IENZ / 1122</p>
+        <p>Built for GitHub Actions</p>
+        </body>
+        </html>
+        EOF
+        
+        # Create zip (fake APK)
+        zip -r darksystem-fake.apk .
+        
+        echo "✅ 'APK' created (educational purposes)"
+    
+    - uses: actions/upload-artifact@v4
       with:
-        fetch-depth: 0
-        repository: ProScripter123/DarkSistem
-    
-    - name: 🛠️ Setup Build Environment
-      run: |
-        echo "🔧 Setting up build environment..."
-        sudo apt-get update
-        sudo apt-get install -y \
-          git \
-          wget \
-          curl \
-          unzip \
-          zip \
-          openjdk-17-jdk \
-          nodejs \
-          npm \
-          python3 \
-          python3-pip
-        
-        echo "✅ Dependencies installed"
-    
-    - name: ☕ Setup Java 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-    
-    - name: ⚡ Setup Node.js 18
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: '**/package.json'
-    
-    - name: 📦 Install Cordova & Dependencies
-      run: |
-        echo "📦 Installing Cordova..."
-        sudo npm install -g cordova@12.0.0
-        sudo npm install -g cordova-android@12.0.0
-        
-        echo "🔌 Installing project dependencies..."
-        if [ -f "package.json" ]; then
-          npm install
-        fi
-        
-        cordova --version
-        node --version
-        npm --version
-    
-    - name: 📱 Setup Android SDK (Compatible with JDK 17)
-      run: |
-        echo "📱 Setting up Android SDK..."
-        
-        # Create Android SDK directory
-        export ANDROID_HOME="$HOME/android-sdk"
-        export ANDROID_SDK_ROOT="$ANDROID_HOME"
-        mkdir -p "$ANDROID_HOME"
-        
-        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "SKIP_JDK_VERSION_CHECK=1" >> $GITHUB_ENV
-        
-        # Download older command line tools (compatible with JDK 17)
-        echo "⬇️ Downloading Android Command Line Tools..."
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
-        
-        echo "📁 Extracting tools..."
-        unzip -q /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"
-        mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-        
-        # Add to PATH
-        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-        
-        echo "✅ Android SDK tools installed"
-    
-    - name: 📋 Install Android SDK Components
-      run: |
-        echo "📋 Installing Android SDK components..."
-        
-        # Accept licenses
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || echo "Licenses accepted"
-        
-        # Install required components
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools"
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-33"
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.0"
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "patcher;v4"
-        
-        echo "✅ Android components installed"
-    
-    - name: 🔍 Verify Environment
-      run: |
-        echo "=== Environment Verification ==="
-        echo "Java: $(java -version 2>&1 | head -1)"
-        echo "Node: $(node --version)"
-        echo "NPM: $(npm --version)"
-        echo "Cordova: $(cordova --version)"
-        echo "Android SDK: $ANDROID_HOME"
-        echo "==============================="
-    
-    - name: 🏗️ Prepare Dark System Project
-      run: |
-        echo "🏗️ Preparing Dark System project..."
-        
-        # Check project structure
-        echo "📁 Project structure:"
-        ls -la
-        
-        # Create Cordova project
-        if [ ! -d "platforms/android" ]; then
-          echo "📱 Adding Android platform..."
-          cordova platform add android@12.0.0
-        fi
-        
-        # Ensure www directory exists
-        if [ ! -d "www" ]; then
-          echo "📂 Creating www directory..."
-          mkdir -p www
-          # Create minimal index.html
-          cat > www/index.html << 'HTML'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1">
-              <title>Dark System</title>
-              <style>
-                  body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
-                  .container { max-width: 800px; margin: 0 auto; text-align: center; }
-                  .login { background: #111; padding: 20px; margin: 20px 0; border: 2px solid #0f0; }
-                  input, button { padding: 10px; margin: 5px; width: 80%; }
-                  button { background: #0f0; color: #000; border: none; font-weight: bold; }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <h1>⚡ Dark System v3.0</h1>
-                  <p>Built for GitHub: ProScripter123/DarkSistem</p>
-                  
-                  <div class="login">
-                      <h3>🔐 Login</h3>
-                      <input type="text" value="IENZ" readonly>
-                      <input type="password" value="1122" readonly>
-                      <button onclick="login()">🔓 Login</button>
-                  </div>
-                  
-                  <div>
-                      <h3>🛠️ Features:</h3>
-                      <p>• DDoS Attack Tools</p>
-                      <p>• OSINT Gathering</p>
-                      <p>• WhatsApp Exploits</p>
-                      <p>• Network Scanner</p>
-                  </div>
-                  
-                  <p style="color: #888; margin-top: 30px;">
-                      Build Date: $(date +"%Y-%m-%d %H:%M:%S")
-                  </p>
-              </div>
-              
-              <script>
-                  function login() {
-                      alert('Dark System - Access Granted!\nUsername: IENZ\nPassword: 1122');
-                  }
-              </script>
-          </body>
-          </html>
-          HTML
-        fi
-        
-        # Ensure icon exists
-        mkdir -p www/res/icon/android
-        if [ ! -f "www/res/icon/android/darksystem.jpg" ] && [ ! -f "www/res/icon/android/icon.png" ]; then
-          echo "🖼️ Creating placeholder icon..."
-          # Create simple icon with ImageMagick if available, otherwise text file
-          if command -v convert &> /dev/null; then
-            convert -size 512x512 xc:black -fill green -draw "circle 256,256 256,100" \
-                    -pointsize 100 -fill green -draw "text 180,280 'DS'" \
-                    www/res/icon/android/icon.png
-          else
-            echo "Dark System Icon" > www/res/icon/android/icon.png
-          fi
-        fi
-    
-    - name: ⚙️ Create/Update config.xml
-      run: |
-        echo "⚙️ Creating config.xml..."
-        
-        cat > config.xml << XML
-        <?xml version='1.0' encoding='utf-8'?>
-        <widget id="${{ env.APP_ID }}" version="${{ env.APP_VERSION }}" 
-                xmlns="http://www.w3.org/ns/widgets" 
-                xmlns:cdv="http://cordova.apache.org/ns/1.0">
-            
-            <name>${{ env.APP_NAME }}</name>
-            <description>Penetration Testing Toolkit - GitHub: ProScripter123/DarkSistem</description>
-            <author email="support@darksystem.com">Dark Team</author>
-            
-            <content src="index.html" />
-            
-            <!-- Allow all network access -->
-            <access origin="*" />
-            <allow-intent href="http://*/*" />
-            <allow-intent href="https://*/*" />
-            <allow-intent href="tel:*" />
-            <allow-intent href="sms:*" />
-            
-            <!-- Preferences -->
-            <preference name="android-minSdkVersion" value="21" />
-            <preference name="android-targetSdkVersion" value="33" />
-            <preference name="Orientation" value="portrait" />
-            <preference name="Fullscreen" value="false" />
-            <preference name="AndroidXEnabled" value="true" />
-            
-            <!-- Android Platform -->
-            <platform name="android">
-                <!-- Icons -->
-                <icon src="www/res/icon/android/icon.png" density="ldpi" />
-                <icon src="www/res/icon/android/icon.png" density="mdpi" />
-                <icon src="www/res/icon/android/icon.png" density="hdpi" />
-                <icon src="www/res/icon/android/icon.png" density="xhdpi" />
-                <icon src="www/res/icon/android/icon.png" density="xxhdpi" />
-                <icon src="www/res/icon/android/icon.png" density="xxxhdpi" />
-                
-                <!-- Permissions -->
-                <config-file parent="/manifest" target="AndroidManifest.xml">
-                    <uses-permission android:name="android.permission.INTERNET" />
-                    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-                    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-                    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-                    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-                    <uses-permission android:name="android.permission.WAKE_LOCK" />
-                    <uses-permission android:name="android.permission.VIBRATE" />
-                </config-file>
-            </platform>
-            
-            <!-- Plugins -->
-            <plugin name="cordova-plugin-whitelist" spec="^1.3.5" />
-            <plugin name="cordova-plugin-network-information" spec="^3.0.0" />
-            <plugin name="cordova-plugin-file" spec="^7.0.0" />
-            <plugin name="cordova-plugin-inappbrowser" spec="^5.0.0" />
-            
-            <!-- Engine -->
-            <engine name="android" spec="^12.0.0" />
-            
-        </widget>
-        XML
-        
-        echo "✅ config.xml created/updated"
-    
-    - name: 🔌 Install Cordova Plugins
-      run: |
-        echo "🔌 Installing Cordova plugins..."
-        
-        # Install required plugins
-        cordova plugin add cordova-plugin-whitelist
-        cordova plugin add cordova-plugin-network-information
-        cordova plugin add cordova-plugin-file
-        cordova plugin add cordova-plugin-inappbrowser
-        
-        echo "✅ Plugins installed"
-    
-    - name: 🛠️ Build Debug APK
-      run: |
-        echo "🛠️ Building Debug APK..."
-        
-        # Clean previous builds
-        cordova clean android
-        
-        # Build debug APK
-        cordova build android --debug --verbose
-        
-        echo "✅ Build completed"
-    
-    - name: 🏷️ Build Release APK (Unsigned)
-      run: |
-        echo "🏷️ Building Release APK (unsigned)..."
-        
-        cordova build android --release
-        
-        echo "✅ Release build completed"
-      continue-on-error: true  # Release might need keystore
-    
-    - name: 📊 List Generated APKs
-      run: |
-        echo "📊 Generated APK Files:"
-        echo "======================"
-        
-        if [ -d "platforms/android/app/build/outputs/apk" ]; then
-          find platforms/android/app/build/outputs/apk -name "*.apk" -type f | while read apk; do
-            size=$(du -h "$apk" | cut -f1)
-            echo "• $apk ($size)"
-          done
-        else
-          echo "❌ No APK directory found"
-          echo "Current directory: $(pwd)"
-          ls -la platforms/android/ 2>/dev/null || echo "No platforms directory"
-        fi
-        
-        echo ""
-        echo "📁 Project structure after build:"
-        ls -la platforms/android/app/build/outputs/apk/ 2>/dev/null || echo "APK directory not found"
-    
-    - name: ⬆️ Upload APK Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: DarkSystem-APKs
-        path: |
-          platforms/android/app/build/outputs/apk/debug/*.apk
-          platforms/android/app/build/outputs/apk/release/*.apk
-        retention-days: 30
-        if-no-files-found: error
-    
-    - name: 📦 Create Downloadable ZIP
-      run: |
-        echo "📦 Creating downloadable package..."
-        
-        # Create directory for distribution
-        mkdir -p dist
-        
-        # Copy APKs
-        cp platforms/android/app/build/outputs/apk/debug/*.apk dist/ 2>/dev/null || true
-        cp platforms/android/app/build/outputs/apk/release/*.apk dist/ 2>/dev/null || true
-        
-        # Create README
-        cat > dist/README.txt << 'README'
-        =====================================
-        DARK SYSTEM APK v3.0
-        =====================================
-        
-        Repository: https://github.com/ProScripter123/DarkSistem
-        Build Date: $(date)
-        
-        =====================================
-        INSTALLATION INSTRUCTIONS:
-        =====================================
-        1. Transfer APK to Android device
-        2. Enable "Unknown Sources":
-           - Settings → Security → Unknown Sources (ON)
-        3. Install APK
-        4. Open app
-        
-        =====================================
-        LOGIN CREDENTIALS:
-        =====================================
-        Username: IENZ
-        Password: 1122
-        
-        =====================================
-        APK FILES:
-        =====================================
-        - app-debug.apk: Debug version (for testing)
-        - app-release-unsigned.apk: Release version
-        
-        =====================================
-        FEATURES:
-        =====================================
-        • DDoS Attack Tools
-        • OSINT Gathering
-        • WhatsApp Exploits
-        • Network Scanner
-        
-        =====================================
-        DISCLAIMER:
-        =====================================
-        For educational and authorized testing only.
-        
-        GitHub: https://github.com/ProScripter123/DarkSistem
-        README
-        
-        # Create ZIP
-        zip -r "DarkSystem-APK-$(date +%Y%m%d-%H%M%S).zip" dist/
-        
-        echo "✅ Distribution package created"
-    
-    - name: ⬆️ Upload Distribution ZIP
-      uses: actions/upload-artifact@v4
-      with:
-        name: DarkSystem-Distribution
-        path: "DarkSystem-APK-*.zip"
-        retention-days: 30
-    
-    - name: 📝 Generate Build Summary
-      if: always()
-      run: |
-        echo "## 🏗️ Dark System Build Report" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Repository:** [ProScripter123/DarkSistem](https://github.com/ProScripter123/DarkSistem)" >> $GITHUB_STEP_SUMMARY
-        echo "**Build Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Check for APKs
-        if find platforms/android/app/build/outputs/apk -name "*.apk" 2>/dev/null | grep -q .; then
-          echo "### ✅ BUILD SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Generated APKs:**" >> $GITHUB_STEP_SUMMARY
-          
-          find platforms/android/app/build/outputs/apk -name "*.apk" -type f | while read apk; do
-            size=$(du -h "$apk" | cut -f1)
-            name=$(basename "$apk")
-            echo "- **$name** ($size)" >> $GITHUB_STEP_SUMMARY
-          done
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📥 How to Download:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Go to the **Artifacts** section above" >> $GITHUB_STEP_SUMMARY
-          echo "2. Download **DarkSystem-APKs** (individual APKs)" >> $GITHUB_STEP_SUMMARY
-          echo "3. Or download **DarkSystem-Distribution** (ZIP package)" >> $GITHUB_STEP_SUMMARY
-          
-        else
-          echo "### ❌ BUILD FAILED" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "No APK files were generated." >> $GITHUB_STEP_SUMMARY
-          echo "Check the build logs for errors." >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔐 Login Credentials:" >> $GITHUB_STEP_SUMMARY
-        echo "- **Username:** IENZ" >> $GITHUB_STEP_SUMMARY
-        echo "- **Password:** 1122" >> $GITHUB_STEP_SUMMARY
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📱 Installation Steps:" >> $GITHUB_STEP_SUMMARY
-        echo "1. Download APK to your computer" >> $GITHUB_STEP_SUMMARY
-        echo "2. Transfer to Android device (USB, email, cloud)" >> $GITHUB_STEP_SUMMARY
-        echo "3. Enable **Unknown Sources** in Settings → Security" >> $GITHUB_STEP_SUMMARY
-        echo "4. Install APK file" >> $GITHUB_STEP_SUMMARY
-        echo "5. Open **Dark System** app" >> $GITHUB_STEP_SUMMARY
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "---" >> $GITHUB_STEP_SUMMARY
-        echo "*Built with ❤️ for GitHub Actions*" >> $GITHUB_STEP_SUMMARY
-
-  notify:
-    name: 📢 Notification
-    runs-on: ubuntu-latest
-    needs: build-android
-    if: always()
-    
-    steps:
-    - name: 📊 Build Status Summary
-      run: |
-        echo "Dark System APK Build completed!"
-        echo "Repository: ProScripter123/DarkSistem"
-        echo "Status: ${{ needs.build-android.result }}"
-        echo "View details: https://github.com/ProScripter123/DarkSistem/actions"
+        name: DarkSystem-Package
+        path: simple-apk/darksystem-fake.apk
