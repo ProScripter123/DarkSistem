@@ -1,62 +1,440 @@
-name: Ultra Simple APK Build
+name: 🏗️ Build Dark System APK - Fixed
 
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  repository_dispatch:
+
+env:
+  APP_ID: "com.darksystem.app"
+  APP_NAME: "DarkSystem"
+  APP_VERSION: "3.0.0"
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: 📦 Checkout Repository
+      uses: actions/checkout@v4
     
-    - name: Create APK manually (No Android SDK)
+    - name: 🛠️ Quick Setup (Skip problematic SDK)
       run: |
-        echo "Creating APK package structure..."
+        echo "🚀 Quick setup for Dark System APK build..."
         
-        # Create basic Android APK structure
-        mkdir -p simple-apk
-        cd simple-apk
+        # Install minimal dependencies
+        sudo apt-get update
+        sudo apt-get install -y \
+          nodejs \
+          npm \
+          openjdk-17-jdk \
+          wget \
+          unzip \
+          zip
         
-        # Create AndroidManifest.xml
-        cat > AndroidManifest.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            package="com.darksystem.app">
-            <application android:allowBackup="true"
-                android:icon="@mipmap/ic_launcher"
-                android:label="Dark System">
-                <activity android:name=".MainActivity"
-                    android:exported="true">
-                    <intent-filter>
-                        <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHER" />
-                    </intent-filter>
-                </activity>
-            </application>
-        </manifest>
-        EOF
+        # Install Cordova
+        sudo npm install -g cordova@11.0.0  # Use stable version
         
-        # Create assets with HTML
-        mkdir -p assets
-        cat > assets/index.html << 'EOF'
-        <html>
-        <head><title>Dark System</title>
-        <style>body{background:#000;color:#0f0;padding:20px;}</style>
-        </head>
-        <body>
-        <h1>Dark System v3.0</h1>
-        <p>Login: IENZ / 1122</p>
-        <p>Built for GitHub Actions</p>
-        </body>
-        </html>
-        EOF
+        # Create minimal Android SDK structure
+        mkdir -p ~/android-sdk
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
         
-        # Create zip (fake APK)
-        zip -r darksystem-fake.apk .
-        
-        echo "✅ 'APK' created (educational purposes)"
+        echo "✅ Quick setup complete"
     
-    - uses: actions/upload-artifact@v4
+    - name: ☕ Setup Java 17
+      uses: actions/setup-java@v4
       with:
-        name: DarkSystem-Package
-        path: simple-apk/darksystem-fake.apk
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: ⚡ Setup Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: 📱 Install Android SDK Minimal
+      run: |
+        echo "📱 Installing minimal Android SDK..."
+        
+        # Create directories
+        mkdir -p $ANDROID_HOME
+        
+        # Download OLDER but stable command line tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
+        
+        # Extract
+        unzip -q cmdline-tools.zip -d $ANDROID_HOME/
+        mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools-latest
+        rm cmdline-tools.zip
+        
+        # Add to PATH
+        echo "$ANDROID_HOME/cmdline-tools-latest/bin" >> $GITHUB_PATH
+        echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+        
+        echo "✅ Android SDK tools installed"
+    
+    - name: 📋 Install ONLY Essential SDK Components
+      run: |
+        echo "📋 Installing essential SDK components..."
+        
+        # Set to skip JDK check
+        export SKIP_JDK_VERSION_CHECK=1
+        
+        # Accept licenses (non-interactive)
+        yes | $ANDROID_HOME/cmdline-tools-latest/bin/sdkmanager --licenses 2>/dev/null || true
+        
+        # Install ONLY the essential packages (avoid problematic ones)
+        echo "Installing platform-tools..."
+        $ANDROID_HOME/cmdline-tools-latest/bin/sdkmanager "platform-tools" 2>&1 | tail -20
+        
+        echo "Installing platform android-33..."
+        $ANDROID_HOME/cmdline-tools-latest/bin/sdkmanager "platforms;android-33" 2>&1 | tail -20
+        
+        echo "Installing build-tools 30.0.3 (more stable)..."
+        $ANDROID_HOME/cmdline-tools-latest/bin/sdkmanager "build-tools;30.0.3" 2>&1 | tail -20
+        
+        echo "✅ Essential components installed"
+    
+    - name: 🔍 Verify Installation
+      run: |
+        echo "🔍 Verification:"
+        echo "Java: $(java -version 2>&1 | head -1)"
+        echo "Node: $(node --version)"
+        echo "Cordova: $(cordova --version 2>/dev/null || echo 'Not found')"
+        echo "Android SDK: $ANDROID_HOME"
+        
+        # List installed packages
+        if [ -f "$ANDROID_HOME/cmdline-tools-latest/bin/sdkmanager" ]; then
+          echo "Installed packages:"
+          $ANDROID_HOME/cmdline-tools-latest/bin/sdkmanager --list 2>/dev/null | grep "installed" || true
+        fi
+    
+    - name: 🏗️ Create Cordova Project Structure
+      run: |
+        echo "🏗️ Creating project structure..."
+        
+        # Create project
+        cordova create dark-app $APP_ID "$APP_NAME"
+        cd dark-app
+        
+        # Add Android platform
+        cordova platform add android@11.0.0  # Use older stable version
+        
+        # Remove default content
+        rm -rf www/*
+        
+        echo "✅ Project structure created"
+    
+    - name: 📂 Copy Dark System Files
+      run: |
+        cd dark-app
+        
+        echo "📂 Copying files..."
+        
+        # Check if source files exist
+        if [ -d "../www" ]; then
+          # Copy existing www directory
+          cp -r ../www/* www/
+          echo "✅ Copied existing www directory"
+        else
+          # Create minimal Dark System interface
+          mkdir -p www
+          
+          # Create index.html
+          cat > www/index.html << 'HTML'
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Dark System v3.0</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            padding: 20px;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container { max-width: 100%; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { font-size: 2em; margin-bottom: 10px; color: #00ff00; }
+        .login-box {
+            background: #111;
+            padding: 20px;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        input, button {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background: #222;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New';
+            font-size: 16px;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .feature {
+            background: #111;
+            padding: 15px;
+            border: 1px solid #333;
+            text-align: center;
+        }
+        .build-info {
+            text-align: center;
+            margin-top: 30px;
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">⚡ DARK SYSTEM v3.0</div>
+            <p>Built via GitHub Actions</p>
+        </div>
+        
+        <div class="login-box">
+            <h3>🔐 ACCESS CONTROL</h3>
+            <input type="text" id="username" value="IENZ" readonly>
+            <input type="password" id="password" value="1122" readonly>
+            <button onclick="login()">▶️ LAUNCH SYSTEM</button>
+        </div>
+        
+        <div class="features">
+            <div class="feature">⚡ DDoS Tools</div>
+            <div class="feature">🔍 OSINT</div>
+            <div class="feature">📱 Bug WA</div>
+            <div class="feature">🌐 Network Scan</div>
+        </div>
+        
+        <div class="build-info">
+            <p>Repository: ProScripter123/DarkSistem</p>
+            <p id="build-date">Build: Loading...</p>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('build-date').textContent = 'Build: ' + new Date().toLocaleString();
+        
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (username === 'IENZ' && password === '1122') {
+                alert('✅ ACCESS GRANTED\n\nDark System initialized.\n\nFeatures:\n• DDoS Attack Panel\n• OSINT Gathering\n• WhatsApp Exploits\n• Network Scanner');
+                
+                // Show system interface
+                document.body.innerHTML = `
+                    <div style="padding: 20px;">
+                        <h1>⚡ DARK SYSTEM ACTIVE</h1>
+                        <p>All systems operational.</p>
+                        <button onclick="location.reload()">Logout</button>
+                    </div>
+                `;
+            } else {
+                alert('❌ ACCESS DENIED');
+            }
+        }
+        
+        // Auto-login after 3 seconds
+        setTimeout(() => {
+            document.getElementById('username').value = 'IENZ';
+            document.getElementById('password').value = '1122';
+        }, 1000);
+    </script>
+</body>
+</html>
+HTML
+          
+          echo "✅ Created Dark System interface"
+        fi
+        
+        # Ensure icon exists
+        mkdir -p www/res/icon/android
+        if [ ! -f "www/res/icon/android/icon.png" ]; then
+          # Create simple icon using base64 (if convert not available)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" | base64 -d > www/res/icon/android/icon.png 2>/dev/null || \
+          echo "ICON" > www/res/icon/android/icon.png
+          echo "✅ Created placeholder icon"
+        fi
+    
+    - name: ⚙️ Create Minimal config.xml
+      run: |
+        cd dark-app
+        
+        cat > config.xml << XML
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="$APP_ID" version="$APP_VERSION" xmlns="http://www.w3.org/ns/widgets">
+    <name>$APP_NAME</name>
+    <description>Dark System - Security Toolkit</description>
+    <author>GitHub: ProScripter123/DarkSistem</author>
+    <content src="index.html" />
+    <access origin="*" />
+    <allow-intent href="*" />
+    
+    <preference name="android-minSdkVersion" value="21" />
+    <preference name="android-targetSdkVersion" value="30" />
+    <preference name="Orientation" value="portrait" />
+    
+    <platform name="android">
+        <icon src="www/res/icon/android/icon.png" />
+    </platform>
+</widget>
+XML
+        
+        echo "✅ config.xml created"
+    
+    - name: 🔌 Add Only Essential Plugin
+      run: |
+        cd dark-app
+        
+        # Add only whitelist plugin (essential)
+        cordova plugin add cordova-plugin-whitelist
+        
+        echo "✅ Plugin added"
+    
+    - name: 🛠️ Build APK (Simplified)
+      run: |
+        cd dark-app
+        
+        echo "🛠️ Building APK..."
+        
+        # Clean and prepare
+        cordova prepare android
+        
+        # Build with minimal flags
+        cordova build android --debug 2>&1 | tail -50
+        
+        # Check result
+        if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          APK_SIZE=$(du -h platforms/android/app/build/outputs/apk/debug/app-debug.apk | cut -f1)
+          echo "✅ SUCCESS: APK built! Size: $APK_SIZE"
+        else
+          echo "⚠️ APK not found in expected location"
+          echo "Searching for APK files..."
+          find platforms/android -name "*.apk" 2>/dev/null || echo "No APK files found"
+        fi
+    
+    - name: 📊 Find and List APKs
+      run: |
+        echo "📊 Searching for APK files..."
+        
+        if [ -d "dark-app/platforms/android" ]; then
+          cd dark-app
+          find platforms/android -name "*.apk" -type f | while read file; do
+            echo "• $file ($(du -h "$file" | cut -f1))"
+          done || echo "No APK files found"
+        else
+          echo "❌ No Android platform directory"
+        fi
+    
+    - name: ⬆️ Upload ANY Found APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: DarkSystem-Output
+        path: |
+          dark-app/platforms/android/app/build/outputs/apk/**/*.apk
+          dark-app/platforms/android/*.apk
+          dark-app/*.apk
+        if-no-files-found: warn
+        retention-days: 7
+    
+    - name: 📦 Create Fallback Download
+      if: failure()
+      run: |
+        echo "📦 Creating fallback package..."
+        
+        # Create a simple HTML version as fallback
+        mkdir -p fallback
+        cat > fallback/index.html << 'HTML'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dark System - Fallback</title>
+    <style>
+        body { background: #000; color: #0f0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .download { background: #0f0; color: #000; padding: 15px; margin: 10px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ APK Build Failed</h1>
+        <p>Dark System APK build encountered issues.</p>
+        <p>Alternative solutions:</p>
+        <ol>
+            <li>Build locally with: <code>cordova build android</code></li>
+            <li>Use Termux on Android to build</li>
+            <li>Try PhoneGap Build online</li>
+        </ol>
+        <p>Login: IENZ / 1122</p>
+    </div>
+</body>
+</html>
+HTML
+        
+        zip -r fallback-darksystem.zip fallback/
+        
+        echo "✅ Fallback package created"
+    
+    - name: ⬆️ Upload Fallback Package
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: DarkSystem-Fallback
+        path: fallback-darksystem.zip
+    
+    - name: 📝 Create Result Summary
+      if: always()
+      run: |
+        echo "## 🏗️ Dark System Build Result" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f "dark-app/platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "### ✅ BUILD SUCCESSFUL!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**APK generated successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Download from:** Artifacts → DarkSystem-Output" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Installation:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download APK" >> $GITHUB_STEP_SUMMARY
+          echo "2. Enable 'Unknown Sources' on Android" >> $GITHUB_STEP_SUMMARY
+          echo "3. Install APK" >> $GITHUB_STEP_SUMMARY
+          echo "4. Login: **IENZ / 1122**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ⚠️ BUILD ISSUES" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "APK build encountered issues. Check logs above." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Alternative solutions:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Build locally on your machine" >> $GITHUB_STEP_SUMMARY
+          echo "2. Use Termux on Android device" >> $GITHUB_STEP_SUMMARY
+          echo "3. Try online build services" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Login credentials always:** IENZ / 1122" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "*Repository: [ProScripter123/DarkSistem](https://github.com/ProScripter123/DarkSistem)*" >> $GITHUB_STEP_SUMMARY
