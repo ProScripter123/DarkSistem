@@ -13,11 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 11
+      - name: Setup Java 17 (untuk Gradle 9+)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 11
+          java-version: 17
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,109 +30,68 @@ jobs:
       - name: Install project dependencies
         run: npm install
 
-      - name: Check Cordova setup
+      - name: Clean and add Android platform
         run: |
-          echo "=== Cordova Version ==="
-          cordova --version
-          echo "=== Current directory ==="
-          pwd
-          echo "=== Listing files ==="
-          ls -la
+          rm -rf platforms android plugins
+          cordova platform add android@11.0.0 --verbose
 
-      - name: Add Android platform (with force if needed)
+      - name: Force Gradle 7.x for Cordova compatibility
         run: |
-          # Remove if exists
-          rm -rf platforms android platforms/android 2>/dev/null || true
-          rm -rf plugins 2>/dev/null || true
+          # Update gradle wrapper to version 7.x
+          cd platforms/android
+          ./gradlew wrapper --gradle-version=7.6 --distribution-type=bin
           
-          # Create necessary directories
-          mkdir -p platforms
-          mkdir -p plugins
+          # Update gradle distribution URL in gradle-wrapper.properties
+          sed -i 's|distributionUrl=.*|distributionUrl=https\://services.gradle.org/distributions/gradle-7.6-bin.zip|' gradle/wrapper/gradle-wrapper.properties
           
-          # Add android platform
-          cordova platform add android@10.1.2 --verbose || cordova platform add android --verbose
-          
-          echo "=== After adding platform ==="
-          ls -la platforms/
-          if [ -d "platforms/android" ]; then
-            echo "Android platform directory exists"
-            ls -la platforms/android/
-          else
-            echo "ERROR: Android platform directory NOT created!"
+          # Set Java compatibility in build.gradle
+          if [ -f "app/build.gradle" ]; then
+            sed -i '/android {/a\    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_11\n        targetCompatibility JavaVersion.VERSION_11\n    }' app/build.gradle
           fi
-
-      - name: Verify Android platform structure
-        run: |
-          if [ -d "platforms/android" ]; then
-            echo "=== Android platform structure ==="
-            find platforms/android -type f -name "gradlew" -o -name "*.gradle" -o -name "build.gradle" | head -20
-            echo "=== gradlew file check ==="
-            if [ -f "platforms/android/gradlew" ]; then
-              echo "gradlew exists"
-              ls -la platforms/android/gradlew
-            else
-              echo "gradlew NOT found, checking alternatives..."
-              find platforms/android -name "gradlew" -type f
-            fi
-          else
-            echo "ERROR: platforms/android directory does not exist!"
-            exit 1
-          fi
-
-      - name: Prepare Android project
-        run: |
-          cordova prepare android --verbose
           
-          # If gradlew still doesn't exist, create it
-          if [ ! -f "platforms/android/gradlew" ]; then
-            echo "Creating gradlew manually..."
-            cd platforms/android
-            gradle wrapper --gradle-version=7.5.1
-            chmod +x gradlew
-            cd ../..
-          else
-            cd platforms/android
-            chmod +x gradlew
-            cd ../..
-          fi
+          cd ../..
 
-      - name: Check Android requirements
+      - name: Set Gradle properties for compatibility
         run: |
-          cordova requirements android --verbose
+          cat > platforms/android/gradle.properties << 'EOF'
+org.gradle.jvmargs=-Xmx4096m
+android.useAndroidX=true
+android.enableJetifier=true
+EOF
+
+      - name: Verify Java and Gradle versions
+        run: |
+          echo "=== Java Version ==="
+          java -version
+          echo "=== Gradle Wrapper Version ==="
+          cd platforms/android && ./gradlew --version && cd ../..
 
       - name: Build Android APK
         run: |
-          echo "=== Starting build ==="
           cordova build android --debug --verbose 2>&1 | tee build.log || {
-            echo "Build failed!"
-            echo "=== Last 100 lines of build log ==="
-            tail -100 build.log
+            echo "=== Build failed, showing error ==="
+            tail -50 build.log
             exit 1
           }
 
-      - name: Find APK files
+      - name: Find and upload APK
         run: |
-          echo "=== Searching for APK files ==="
-          find . -name "*.apk" -type f 2>/dev/null | xargs -I {} echo "Found: {}"
+          echo "=== Finding APK files ==="
+          find platforms/android -name "*.apk" -type f
           
-          if [ -d "platforms/android/app/build/outputs/apk" ]; then
-            echo "=== Standard APK location ==="
-            find platforms/android/app/build/outputs/apk -name "*.apk" -type f
-          fi
+          # Copy APK to predictable location
+          mkdir -p dist
+          find platforms/android -name "*debug*.apk" -type f -exec cp {} dist/ \;
           
-          if [ -d "platforms/android/build/outputs/apk" ]; then
-            echo "=== Alternative APK location ==="
-            find platforms/android/build/outputs/apk -name "*.apk" -type f
-          fi
+          echo "=== APKs in dist/ ==="
+          ls -la dist/
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: |
-            platforms/android/app/build/outputs/apk/**/*.apk
-            platforms/android/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
+          path: dist/*.apk
+          if-no-files-found: error
 
       - name: Upload build log
         if: always()
