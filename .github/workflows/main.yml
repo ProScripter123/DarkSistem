@@ -1,422 +1,121 @@
-name: 🏗️ Build Dark System APK
+name: Build Dark System APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 📦 Checkout Repository
+    - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: 🛠️ Setup Basic Tools
+    - name: Setup environment
       run: |
-        echo "Setting up build environment..."
         sudo apt-get update
-        sudo apt-get install -y \
-          nodejs \
-          npm \
-          openjdk-17-jdk \
-          wget \
-          unzip \
-          zip \
-          python3
-        
-        # Install Cordova
-        sudo npm install -g cordova@11.0.0
-        
-        echo "✅ Basic tools installed"
+        sudo apt-get install -y nodejs npm openjdk-17-jdk wget unzip
     
-    - name: ☕ Setup Java 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+    - name: Install Cordova
+      run: npm install -g cordova
     
-    - name: ⚡ Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-    
-    - name: 📱 Setup Android SDK (Lite Version)
+    - name: Create Cordova project
       run: |
-        echo "Setting up Android SDK..."
-        
-        # Create Android SDK directory
-        export ANDROID_SDK_ROOT="$HOME/android-sdk"
-        mkdir -p "$ANDROID_SDK_ROOT"
-        
-        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "SKIP_JDK_VERSION_CHECK=1" >> $GITHUB_ENV
-        
-        # Download minimal command line tools
-        echo "Downloading command line tools..."
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/tools.zip
-        
-        # Extract
-        mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-        unzip -q /tmp/tools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
-        mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-        
-        # Add to PATH
-        echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-        
-        echo "✅ Android SDK setup complete"
+        cordova create darkapp com.darksystem.app "DarkSystem"
+        cd darkapp
+        cordova platform add android
     
-    - name: 📋 Install Essential Android Components
+    - name: Copy project files
       run: |
-        echo "Installing Android SDK components..."
-        
-        # Accept licenses
-        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-        
-        # Install only essential packages
-        echo "1. Installing platform-tools..."
-        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" > /dev/null 2>&1 || echo "Platform tools installed"
-        
-        echo "2. Installing platform android-33..."
-        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" > /dev/null 2>&1 || echo "Platform installed"
-        
-        echo "3. Installing build-tools 30.0.3..."
-        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "build-tools;30.0.3" > /dev/null 2>&1 || echo "Build tools installed"
-        
-        echo "✅ Android components installed"
-    
-    - name: 🔍 Verify Project Structure
-      run: |
-        echo "🔍 Verifying project structure..."
-        echo "Current directory: $(pwd)"
-        echo ""
-        echo "📁 Directory structure:"
-        ls -la
-        
-        echo ""
-        echo "📂 www directory contents:"
-        if [ -d "www" ]; then
-          ls -la www/
-          echo ""
-          echo "📄 Checking essential files:"
-          if [ -f "www/index.html" ]; then
-            echo "✅ www/index.html exists"
-          else
-            echo "❌ www/index.html missing"
-          fi
-          
-          if [ -d "www/js" ] && [ -f "www/js/app.js" ]; then
-            echo "✅ www/js/app.js exists"
-          else
-            echo "⚠️ www/js/app.js may be missing"
-          fi
-        else
-          echo "❌ www directory not found!"
-        fi
-        
-        echo ""
-        echo "⚙️ Checking config files:"
-        if [ -f "config.xml" ]; then
-          echo "✅ config.xml exists"
-          head -20 config.xml
-        else
-          echo "❌ config.xml missing"
-        fi
-        
-        if [ -f "package.json" ]; then
-          echo "✅ package.json exists"
-        else
-          echo "⚠️ package.json missing"
-        fi
-    
-    - name: 🏗️ Prepare Cordova Project
-      run: |
-        echo "🏗️ Preparing Cordova project..."
-        
-        # Create a fresh Cordova project inside build directory
-        cordova create cordova-build com.darksystem.app "DarkSystem"
-        cd cordova-build
-        
-        # Add Android platform
-        cordova platform add android@11.0.0
-        
-        echo "✅ Cordova project created"
-    
-    - name: 📂 Copy Dark System Files
-      run: |
-        echo "📂 Copying Dark System files..."
-        cd cordova-build
-        
-        # Remove default www content
+        cd darkapp
         rm -rf www/*
         
-        # Copy entire www directory
+        # Copy www directory if exists
         if [ -d "../www" ]; then
-          echo "Copying www directory..."
           cp -r ../www/* www/
-          
-          # Ensure necessary directories exist
-          mkdir -p www/css www/js www/img www/plugins
-          
-          # Create minimal files if they don't exist
-          if [ ! -f "www/index.html" ]; then
-            echo "Creating minimal index.html..."
-            cat > www/index.html << 'HTML'
+        else
+          # Create minimal app
+          mkdir -p www
+          cat > www/index.html << 'HTML'
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dark System</title>
-    <style>body{background:#000;color:#0f0;padding:20px;}</style>
+    <style>
+        body { background: #000; color: #0f0; padding: 20px; font-family: monospace; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .login { background: #111; padding: 20px; margin: 20px 0; border: 2px solid #0f0; }
+        input, button { padding: 10px; margin: 5px; width: 100%; }
+        button { background: #0f0; color: #000; font-weight: bold; }
+    </style>
 </head>
 <body>
-    <h1>⚡ Dark System</h1>
-    <p>Login: IENZ / 1122</p>
+    <div class="container">
+        <h1>⚡ Dark System v3.0</h1>
+        <p>Built via GitHub Actions</p>
+        
+        <div class="login">
+            <h3>🔐 Login</h3>
+            <input type="text" value="IENZ" readonly>
+            <input type="password" value="1122" readonly>
+            <button onclick="login()">Login</button>
+        </div>
+        
+        <div>
+            <h3>🛠️ Features:</h3>
+            <p>• DDoS Attack Tools</p>
+            <p>• OSINT Gathering</p>
+            <p>• WhatsApp Exploits</p>
+            <p>• Network Scanner</p>
+        </div>
+        
+        <p style="color: #888; margin-top: 30px;">
+            GitHub: ProScripter123/DarkSistem
+        </p>
+    </div>
+    
+    <script>
+        function login() {
+            alert('Access Granted!\nUsername: IENZ\nPassword: 1122');
+        }
+    </script>
 </body>
 </html>
 HTML
-          fi
-          
-          if [ ! -f "www/js/app.js" ] && [ -f "www/js/app.js" ]; then
-            echo "Using existing app.js"
-          else
-            echo "// Dark System App" > www/js/app.js
-          fi
-          
-          echo "✅ Files copied successfully"
-        else
-          echo "❌ Source www directory not found!"
-          exit 1
         fi
+    
+    - name: Create minimal config.xml
+      run: |
+        cd darkapp
         
-        # Copy config.xml if exists, otherwise create minimal one
-        if [ -f "../config.xml" ]; then
-          echo "Using existing config.xml..."
-          cp ../config.xml .
-        else
-          echo "Creating minimal config.xml..."
-          cat > config.xml << 'XML'
+        cat > config.xml << 'XML'
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.darksystem.app" version="3.0.0" xmlns="http://www.w3.org/ns/widgets">
-    <name>Dark System</name>
-    <description>Penetration Testing Toolkit</description>
+<widget id="com.darksystem.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
+    <name>DarkSystem</name>
+    <description>Security Tools</description>
     <author>Dark Team</author>
     <content src="index.html" />
     <access origin="*" />
     <preference name="android-minSdkVersion" value="21" />
 </widget>
 XML
-        fi
-        
-        # Copy package.json if exists
-        if [ -f "../package.json" ]; then
-          cp ../package.json .
-        fi
     
-    - name: 🖼️ Handle Icons and Assets
+    - name: Add whitelist plugin
       run: |
-        cd cordova-build
-        
-        echo "🖼️ Handling icons..."
-        
-        # Create icon directory if not exists
-        mkdir -p www/img
-        
-        # Check for existing icon
-        if [ -f "www/img/icon.png" ]; then
-          echo "✅ Using existing icon.png"
-        elif [ -f "../www/img/icon.png" ]; then
-          echo "📥 Copying icon from parent directory"
-          cp ../www/img/icon.png www/img/
-        else
-          echo "🎨 Creating placeholder icon..."
-          # Create simple icon using base64
-          echo "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAA" \
-               "B3RJTUUH5gUDFzUO3sIeJAAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAAl" \
-               "SURBVFjD7c6xCYAwEAXQD5QhHE1w/1WcwsnE1j6Mp54DvtABAPgT4k7bQ4V0H7JRAAAAAElFTkS" \
-               "uQmCC" | base64 -d > www/img/icon.png 2>/dev/null || \
-          echo "Placeholder" > www/img/icon.png
-        fi
-        
-        # Create res directory for Android icons
-        mkdir -p res/icon/android
-        if [ -f "www/img/icon.png" ]; then
-          cp www/img/icon.png res/icon/android/
-        fi
-    
-    - name: 🔧 Update Config for Build
-      run: |
-        cd cordova-build
-        
-        echo "🔧 Updating config.xml for build..."
-        
-        # Update config.xml to use correct paths
-        if [ -f "config.xml" ]; then
-          # Check if icon config exists
-          if ! grep -q "icon src" config.xml; then
-            echo "Adding icon configuration..."
-            # Insert icon config before closing widget tag
-            sed -i '/<\/widget>/i\    <platform name="android">\n        <icon src="www/img/icon.png" />\n    </platform>' config.xml
-          fi
-          
-          # Ensure permissions are included
-          if ! grep -q "uses-permission" config.xml; then
-            echo "Adding Android permissions..."
-            sed -i '/<platform name="android">/a\        <config-file parent="/manifest" target="AndroidManifest.xml">\n            <uses-permission android:name="android.permission.INTERNET" />\n            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n        </config-file>' config.xml
-          fi
-          
-          echo "Updated config.xml:"
-          cat config.xml
-        fi
-    
-    - name: 🔌 Add Required Plugins
-      run: |
-        cd cordova-build
-        
-        echo "🔌 Adding Cordova plugins..."
-        
-        # Add essential plugins
+        cd darkapp
         cordova plugin add cordova-plugin-whitelist
-        cordova plugin add cordova-plugin-network-information
-        
-        echo "✅ Plugins added"
     
-    - name: 🛠️ Build Android APK
+    - name: Build APK
       run: |
-        cd cordova-build
-        
-        echo "🛠️ Building Android APK..."
-        echo "This may take 2-3 minutes..."
-        
-        # Build debug APK
+        cd darkapp
         cordova build android --debug
-        
-        echo "✅ Build process completed"
     
-    - name: 📊 Check Build Results
-      run: |
-        cd cordova-build
-        
-        echo "📊 Checking build results..."
-        
-        APK_DIR="platforms/android/app/build/outputs/apk/debug"
-        
-        if [ -d "$APK_DIR" ]; then
-          echo "APK directory contents:"
-          ls -la "$APK_DIR/"
-          
-          APK_FILE=$(find "$APK_DIR" -name "*.apk" | head -1)
-          if [ -n "$APK_FILE" ]; then
-            echo ""
-            echo "✅ APK FOUND: $APK_FILE"
-            echo "📦 Size: $(du -h "$APK_FILE" | cut -f1)"
-          else
-            echo "❌ No APK files found in $APK_DIR"
-          fi
-        else
-          echo "❌ APK directory not found: $APK_DIR"
-          echo "Available platforms directories:"
-          find platforms/android -type d 2>/dev/null || echo "No platforms directory"
-        fi
-    
-    - name: ⬆️ Upload APK Artifact
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: DarkSystem-APK
-        path: |
-          cordova-build/platforms/android/app/build/outputs/apk/debug/*.apk
-          cordova-build/platforms/android/app/build/outputs/apk/release/*.apk
-        if-no-files-found: error
-        retention-days: 7
-    
-    - name: 📦 Package Backend Files
-      run: |
-        echo "📦 Packaging backend files..."
-        
-        # Create distribution package
-        mkdir -p dist
-        
-        # Copy APK if exists
-        if [ -f "cordova-build/platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-          cp cordova-build/platforms/android/app/build/outputs/apk/debug/app-debug.apk dist/DarkSystem-v3.0.apk
-        fi
-        
-        # Copy backend files
-        if [ -d "backend" ]; then
-          cp -r backend dist/
-        fi
-        
-        # Create README
-        cat > dist/README.txt << 'EOF'
-=====================================
-DARK SYSTEM v3.0 - COMPLETE PACKAGE
-=====================================
-
-Contents:
-1. DarkSystem-v3.0.apk - Android application
-2. backend/ - Flask backend server
-
-INSTALLATION:
-1. Install APK on Android (enable Unknown Sources)
-2. Run backend: python3 backend/app.py
-3. Open app and login: IENZ / 1122
-
-FEATURES:
-- DDoS Attack Tools
-- OSINT Gathering  
-- WhatsApp Exploits
-- Network Scanner
-
-GitHub: https://github.com/ProScripter123/DarkSistem
-EOF
-        
-        # Create zip
-        zip -r DarkSystem-Complete-$(date +%Y%m%d).zip dist/
-        
-        echo "✅ Distribution package created"
-    
-    - name: ⬆️ Upload Complete Package
-      uses: actions/upload-artifact@v4
-      with:
-        name: DarkSystem-Complete
-        path: DarkSystem-Complete-*.zip
-        retention-days: 7
-    
-    - name: 📝 Generate Build Report
-      if: always()
-      run: |
-        echo "## 🏗️ Dark System Build Report" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Repository:** [ProScripter123/DarkSistem](https://github.com/ProScripter123/DarkSistem)" >> $GITHUB_STEP_SUMMARY
-        echo "**Build Time:** $(date)" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Check if APK was created
-        if [ -f "cordova-build/platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-          APK_SIZE=$(du -h cordova-build/platforms/android/app/build/outputs/apk/debug/app-debug.apk | cut -f1)
-          
-          echo "### ✅ BUILD SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Generated Files:**" >> $GITHUB_STEP_SUMMARY
-          echo "- **DarkSystem-APK**: Contains the APK file ($APK_SIZE)" >> $GITHUB_STEP_SUMMARY
-          echo "- **DarkSystem-Complete**: Complete package with backend" >> $GITHUB_STEP_SUMMARY
-          
-        else
-          echo "### ⚠️ BUILD COMPLETED WITH WARNINGS" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "APK file may not have been generated correctly." >> $GITHUB_STEP_SUMMARY
-          echo "Check artifacts for available files." >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔐 Login Credentials:" >> $GITHUB_STEP_SUMMARY
-        echo "- **Username:** IENZ" >> $GITHUB_STEP_SUMMARY
-        echo "- **Password:** 1122" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📱 Installation:" >> $GITHUB_STEP_SUMMARY
-        echo "1. Download from **Artifacts** section" >> $GITHUB_STEP_SUMMARY
-        echo "2. Enable **Unknown Sources** on Android" >> $GITHUB_STEP_SUMMARY
-        echo "3. Install APK" >> $GITHUB_STEP_SUMMARY
-        echo "4. Open **Dark System** app" >> $GITHUB_STEP_SUMMARY
+        path: darkapp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
