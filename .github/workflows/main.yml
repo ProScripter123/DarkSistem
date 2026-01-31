@@ -25,24 +25,46 @@ jobs:
           node-version: 18
 
       - name: Install Cordova
-        run: npm install -g cordova
+        run: npm install -g cordova@latest
 
       - name: Install dependencies
         run: npm install
 
       - name: Add Android platform
-        run: cordova platform add android
+        run: |
+          cordova platform rm android 2>/dev/null || true
+          cordova platform add android@latest
 
-      - name: Build Debug APK
-        run: cordova build android
+      - name: Install Gradle 7.x (required for Cordova Android)
+        run: |
+          wget https://services.gradle.org/distributions/gradle-7.5.1-bin.zip -P /tmp
+          sudo unzip -d /opt/gradle /tmp/gradle-7.5.1-bin.zip
+          echo "GRADLE_HOME=/opt/gradle/gradle-7.5.1" >> $GITHUB_ENV
+          echo "/opt/gradle/gradle-7.5.1/bin" >> $GITHUB_PATH
+
+      - name: Set Gradle properties
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" > ~/.gradle/gradle.properties
+          echo "android.useAndroidX=true" >> ~/.gradle/gradle.properties
+          echo "android.enableJetifier=true" >> ~/.gradle/gradle.properties
+
+      - name: Clean and Build Debug APK
+        run: |
+          cordova clean android
+          cordova build android --debug --verbose
 
       - name: Verify APK output
         run: |
           echo "=== APK FILES ==="
-          ls -R platforms/android/app/build/outputs/apk
+          find platforms/android -name "*.apk" -type f | xargs ls -la
+          echo "=== Build outputs ==="
+          find platforms/android -type d -name "apk" | xargs ls -la
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            platforms/android/app/build/outputs/apk/debug/*.apk
+            platforms/android/build/outputs/apk/debug/*.apk
