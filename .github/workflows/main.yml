@@ -19,15 +19,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # FIX: Install the specific Build Tools and Platform version Cordova is asking for
+      - name: Setup Android SDK
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2" "platforms;android-33"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.7
 
       - name: Install Cordova
         run: npm install -g cordova
@@ -35,11 +35,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Clear old platform data to ensure a clean build with the right tools
       - name: Add Android platform
-        run: cordova platform add android
+        run: |
+          cordova platform add android || (cordova platform remove android && cordova platform add android)
 
       - name: Build Debug APK
-        run: cordova build android
+        run: cordova build android --verbose
 
       - name: Verify APK output
         run: |
