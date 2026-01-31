@@ -1,4 +1,4 @@
-name: Build HTML to APK (Cordova Debug)
+name: Build Cordova APK (Java 11 + Gradle 7.x)
 
 on:
   push:
@@ -13,11 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17 (untuk Gradle 9+)
+      - name: Setup Java 11
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -27,75 +27,49 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova@11.0.0
 
-      - name: Install project dependencies
+      - name: Install dependencies
         run: npm install
 
-      - name: Clean and add Android platform
+      - name: Add Android platform with specific version
         run: |
           rm -rf platforms android plugins
-          cordova platform add android@11.0.0 --verbose
+          cordova platform add android@11.0.0
 
-      - name: Force Gradle 7.x for Cordova compatibility
+      - name: Force Gradle 7.x before building
         run: |
-          # Update gradle wrapper to version 7.x
-          cd platforms/android
-          ./gradlew wrapper --gradle-version=7.6 --distribution-type=bin
-          
-          # Update gradle distribution URL in gradle-wrapper.properties
-          sed -i 's|distributionUrl=.*|distributionUrl=https\://services.gradle.org/distributions/gradle-7.6-bin.zip|' gradle/wrapper/gradle-wrapper.properties
-          
-          # Set Java compatibility in build.gradle
-          if [ -f "app/build.gradle" ]; then
-            sed -i '/android {/a\    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_11\n        targetCompatibility JavaVersion.VERSION_11\n    }' app/build.gradle
-          fi
-          
-          cd ../..
-
-      - name: Set Gradle properties for compatibility
-        run: |
-          cat > platforms/android/gradle.properties << 'EOF'
-org.gradle.jvmargs=-Xmx4096m
-android.useAndroidX=true
-android.enableJetifier=true
+          # Create/update gradle wrapper properties for Gradle 7.6
+          cat > platforms/android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-7.6-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
 EOF
 
-      - name: Verify Java and Gradle versions
-        run: |
-          echo "=== Java Version ==="
-          java -version
-          echo "=== Gradle Wrapper Version ==="
-          cd platforms/android && ./gradlew --version && cd ../..
+          # Set Java 11 compatibility in build.gradle
+          cat >> platforms/android/app/build.gradle << 'EOF'
 
-      - name: Build Android APK
-        run: |
-          cordova build android --debug --verbose 2>&1 | tee build.log || {
-            echo "=== Build failed, showing error ==="
-            tail -50 build.log
-            exit 1
-          }
+android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+EOF
 
-      - name: Find and upload APK
+          # Make gradlew executable
+          chmod +x platforms/android/gradlew
+
+      - name: Build with Cordova
         run: |
-          echo "=== Finding APK files ==="
-          find platforms/android -name "*.apk" -type f
+          # Set environment variable to use Java 11
+          export JAVA_HOME=/usr/lib/jvm/temurin-11-jdk-amd64
+          export PATH=$JAVA_HOME/bin:$PATH
           
-          # Copy APK to predictable location
-          mkdir -p dist
-          find platforms/android -name "*debug*.apk" -type f -exec cp {} dist/ \;
-          
-          echo "=== APKs in dist/ ==="
-          ls -la dist/
+          cordova build android --debug --verbose
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: dist/*.apk
-          if-no-files-found: error
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build.log
+          path: platforms/android/app/build/outputs/apk/debug/*.apk
