@@ -1,4 +1,4 @@
-name: Build Full Cordova App (Fix XmlParser)
+name: Build Full Cordova App (Final Fix)
 
 on:
   push:
@@ -27,35 +27,37 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
+      # LANGKAH PENTING: Instal Build Tools yang diminta (33.0.2)
+      - name: Install Android Build Tools
+        run: |
+          SDK_MANAGER=$(find $ANDROID_HOME -name sdkmanager | head -n 1)
+          echo "y" | $SDK_MANAGER --install "build-tools;33.0.2" "platforms;android-33"
+
       - name: Prepare Project Files
         run: |
           mkdir -p www
-          # Salin folder backend ke www agar masuk ke APK
+          # Copy backend folder ke dalam www agar ikut masuk ke APK
           if [ -d "backend" ]; then cp -r backend www/; fi
           npm install
 
       - name: Add Android Platform
         run: |
           cordova platform add android
-          # Kita hapus plugin whitelist secara paksa karena sering bikin error di v12
           cordova plugin remove cordova-plugin-whitelist --silent || true
 
-      - name: Build Debug APK (The Nuclear Option)
+      - name: Build Debug APK
+        env:
+          CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # 1. Download Gradle 8.7 secara manual ke folder home
+          # 1. Download Gradle 8.7 manual untuk bypass sistem v9.3
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
           unzip -q /tmp/gradle-8.7-bin.zip -d /tmp/gradle-fixed
-          
-          # 2. Masukkan ke PATH paling depan agar Gradle 9.3 tersembunyi
           export PATH=/tmp/gradle-fixed/gradle-8.7/bin:$PATH
           
-          # 3. Verifikasi gradle yang aktif sekarang harus 8.7
-          gradle -v
+          # 2. Set environment variable agar Gradle tahu lokasi SDK
+          export ANDROID_HOME=$ANDROID_HOME
           
-          # 4. Beri tahu Cordova lokasi gradle distribution secara eksplisit
-          export CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL="file:///tmp/gradle-8.7-bin.zip"
-          
-          # 5. Jalankan build
+          # 3. Jalankan build
           cordova build android --verbose --device
 
       - name: Verify and Upload APK
@@ -66,5 +68,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DarkSystem-Fixed-APK
+          name: DarkSystem-Final-APK
           path: output/app-debug.apk
