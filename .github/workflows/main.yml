@@ -34,21 +34,22 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prepare Platform and Clean Plugins
+      - name: Prepare Platform
         run: |
-          # Remove whitelist plugin because it's built into Cordova-Android 12
+          # Remove problematic legacy plugin
           cordova plugin remove cordova-plugin-whitelist --silent || true
-          # Add platform
           cordova platform add android
-          # Run a 'prepare' to generate necessary files
           cordova prepare android
 
       - name: Build Debug APK
-        # We pass the Gradle version directly through an Environment Variable 
-        # This bypasses the need to manually chmod 'gradlew' files
+        # We set CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL to force version 8.7
+        # AND we set the PATH to hide the system's Gradle 9.3.0
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
-        run: cordova build android --verbose --device
+        run: |
+          # This line effectively "hides" the system gradle from Cordova
+          export PATH=$(echo $PATH | tr ':' '\n' | grep -v "gradle" | tr '\n' ':')
+          cordova build android --verbose --device
 
       - name: Verify APK output
         run: |
