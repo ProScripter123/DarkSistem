@@ -27,12 +27,10 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      # Langkah ini memastikan semua folder (backend, dll) siap
       - name: Prepare Project Files
         run: |
-          # Buat folder www jika belum ada
           mkdir -p www
-          # Jika folder backend ada di root, pindahkan ke www agar ikut ter-build
+          # Copy backend jika ada
           if [ -d "backend" ]; then cp -r backend www/; fi
           npm install
 
@@ -41,19 +39,28 @@ jobs:
           cordova platform add android
           cordova prepare android
 
-      - name: Build Debug APK
-        env:
-          CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
+      # LANGKAH KUNCI: Kita buat wrapper manual pakai Gradle 9.3 tapi targetnya 8.7
+      # Ini supaya script XmlParser yang rusak di v9.3 tidak terpanggil saat compile utama
+      - name: Generate Gradle Wrapper
         run: |
-          # Hapus Gradle sistem agar tidak bentrok (Penyebab XmlParser error)
-          sudo rm -f /usr/local/bin/gradle
-          sudo rm -f /usr/bin/gradle
-          
-          # Jalankan build
-          cordova build android --verbose --device
+          cd platforms/android
+          gradle wrapper --gradle-version 8.7
+
+      - name: Build Debug APK
+        # Kita pakai perintah ./gradlew (wrapper) secara langsung 
+        # karena 'cordova build' seringkali bandel memanggil gradle sistem
+        run: |
+          cd platforms/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --verbose
+
+      - name: Verify and Move APK
+        run: |
+          mkdir -p output
+          find platforms/android/app/build/outputs/apk/debug -name "*.apk" -exec cp {} output/app-debug.apk \;
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FullApp-Debug
-          path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          name: DarkSystem-Debug
+          path: output/app-debug.apk
