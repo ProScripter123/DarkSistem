@@ -19,11 +19,6 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install Android SDK Components
-        run: |
-          # Use the pre-installed sdkmanager more reliably
-          yes | sdkmanager --install "build-tools;33.0.2" "platforms;android-33"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -35,25 +30,27 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prepare Cordova Platform
+      - name: Prepare Platform
         run: |
+          # Remove problematic legacy plugin
           cordova plugin remove cordova-plugin-whitelist --silent || true
           cordova platform add android
           cordova prepare android
 
       - name: Build Debug APK
-        # We use 'env' to set the version AND a script to nuke the system Gradle
+        # This environment variable is the most important part
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # 1. KILL the system Gradle so it can't hijack the build
-          sudo rm -rf /usr/bin/gradle
-          sudo rm -rf /usr/share/gradle*
+          # 1. Force the runner to forget where Gradle 9.3 is
+          sudo rm -f /usr/local/bin/gradle
+          sudo rm -f /usr/bin/gradle
           
-          # 2. Ensure PATH is clean
-          export PATH=$(echo $PATH | tr ':' '\n' | grep -v "gradle" | tr '\n' ':')
+          # 2. Add the Android SDK tools to the PATH so Cordova can find them
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
           
-          # 3. Force the build
+          # 3. Build. Cordova will automatically download the correct SDK tools
+          # if they are missing, as long as it has access to the internet.
           cordova build android --verbose --device
 
       - name: Verify APK output
