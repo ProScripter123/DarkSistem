@@ -31,15 +31,14 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Clean and Prepare
+      - name: Clean and Prepare Cordova
         run: |
-          # Hapus plugin whitelist yang sering bentrok di Cordova 12
+          # Hapus plugin whitelist yang sering bentrok di v12 (sudah built-in)
           sed -i '/cordova-plugin-whitelist/d' config.xml
           
-          # Hapus sisa build lama jika ada
+          # Hapus folder platform lama untuk memastikan XML di-generate ulang secara bersih
           rm -rf platforms/android
           
-          # Tambah platform secara bersih
           cordova platform add android --nosave
           cordova prepare android
 
@@ -47,16 +46,16 @@ jobs:
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # Paksa gunakan Gradle 8.7 (Bypass v9.3)
+          # Bypass Gradle 9.3 sistem
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
           unzip -q /tmp/gradle-8.7-bin.zip -d /tmp/gradle-fixed
           export PATH=/tmp/gradle-fixed/gradle-8.7/bin:$PATH
           
-          # Jalankan build
+          # Jalankan build dengan flag --device agar lebih stabil
           cordova build android --verbose --device
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DarkSystem-Toolkit-Debug
+          name: DarkSystem-App-Debug
           path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
