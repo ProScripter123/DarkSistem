@@ -21,7 +21,10 @@ jobs:
 
       - name: Setup Android SDK
         run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/latest/bin/sdkmanager --install "build-tools;33.0.2" "platforms;android-33"
+          # We use a wildcard/find approach to locate sdkmanager regardless of the runner's exact folder structure
+          SDK_MANAGER=$(find $ANDROID_HOME -name sdkmanager | head -n 1)
+          echo "Using sdkmanager at: $SDK_MANAGER"
+          echo "y" | $SDK_MANAGER --install "build-tools;33.0.2" "platforms;android-33"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,19 +39,19 @@ jobs:
 
       - name: Prepare Platform
         run: |
-          # Remove legacy whitelist plugin (now built-in to cordova-android 12)
+          # Remove legacy plugin and fresh add the platform
           cordova plugin remove cordova-plugin-whitelist --silent || true
           cordova platform add android
           cordova prepare android
 
       - name: Build Debug APK
-        # We force Gradle 8.7 via environment variable
-        # AND manually remove the system's Gradle 9.3 from the PATH
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # Remove any system gradle paths to force Cordova to use the wrapper/distribution URL
+          # 1. Hide the system Gradle 9.3 from the PATH
           export PATH=$(echo $PATH | tr ':' '\n' | grep -v "gradle" | tr '\n' ':')
+          
+          # 2. Build using the wrapper Cordova creates
           cordova build android --verbose --device
 
       - name: Verify APK output
