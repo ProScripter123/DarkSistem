@@ -1,4 +1,4 @@
-name: Build Full Cordova App (Debug APK)
+name: Build Full Cordova App (Fix XmlParser)
 
 on:
   push:
@@ -30,37 +30,41 @@ jobs:
       - name: Prepare Project Files
         run: |
           mkdir -p www
-          # Copy backend jika ada
+          # Salin folder backend ke www agar masuk ke APK
           if [ -d "backend" ]; then cp -r backend www/; fi
           npm install
 
       - name: Add Android Platform
         run: |
           cordova platform add android
-          cordova prepare android
+          # Kita hapus plugin whitelist secara paksa karena sering bikin error di v12
+          cordova plugin remove cordova-plugin-whitelist --silent || true
 
-      # LANGKAH KUNCI: Kita buat wrapper manual pakai Gradle 9.3 tapi targetnya 8.7
-      # Ini supaya script XmlParser yang rusak di v9.3 tidak terpanggil saat compile utama
-      - name: Generate Gradle Wrapper
+      - name: Build Debug APK (The Nuclear Option)
         run: |
-          cd platforms/android
-          gradle wrapper --gradle-version 8.7
+          # 1. Download Gradle 8.7 secara manual ke folder home
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
+          unzip -q /tmp/gradle-8.7-bin.zip -d /tmp/gradle-fixed
+          
+          # 2. Masukkan ke PATH paling depan agar Gradle 9.3 tersembunyi
+          export PATH=/tmp/gradle-fixed/gradle-8.7/bin:$PATH
+          
+          # 3. Verifikasi gradle yang aktif sekarang harus 8.7
+          gradle -v
+          
+          # 4. Beri tahu Cordova lokasi gradle distribution secara eksplisit
+          export CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL="file:///tmp/gradle-8.7-bin.zip"
+          
+          # 5. Jalankan build
+          cordova build android --verbose --device
 
-      - name: Build Debug APK
-        # Kita pakai perintah ./gradlew (wrapper) secara langsung 
-        # karena 'cordova build' seringkali bandel memanggil gradle sistem
-        run: |
-          cd platforms/android
-          chmod +x gradlew
-          ./gradlew assembleDebug --verbose
-
-      - name: Verify and Move APK
+      - name: Verify and Upload APK
         run: |
           mkdir -p output
           find platforms/android/app/build/outputs/apk/debug -name "*.apk" -exec cp {} output/app-debug.apk \;
 
-      - name: Upload APK
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DarkSystem-Debug
+          name: DarkSystem-Fixed-APK
           path: output/app-debug.apk
