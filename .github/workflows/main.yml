@@ -1,4 +1,4 @@
-name: Build Cordova APK (Java 11 + Gradle 7.x)
+name: Build HTML to APK (Cordova Debug)
 
 on:
   push:
@@ -13,11 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 11
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 11
+          java-version: 17
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,51 +25,24 @@ jobs:
           node-version: 18
 
       - name: Install Cordova
-        run: npm install -g cordova@11.0.0
+        run: npm install -g cordova
 
       - name: Install dependencies
         run: npm install
 
-      - name: Add Android platform with specific version
+      - name: Add Android platform
+        run: cordova platform add android
+
+      - name: Build Debug APK
+        run: cordova build android
+
+      - name: Verify APK output
         run: |
-          rm -rf platforms android plugins
-          cordova platform add android@11.0.0
-
-      - name: Force Gradle 7.x before building
-        run: |
-          # Create/update gradle wrapper properties for Gradle 7.6
-          cat > platforms/android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-distributionBase=GRADLE_USER_HOME
-distributionPath=wrapper/dists
-distributionUrl=https\://services.gradle.org/distributions/gradle-7.6-bin.zip
-zipStoreBase=GRADLE_USER_HOME
-zipStorePath=wrapper/dists
-EOF
-
-          # Set Java 11 compatibility in build.gradle
-          cat >> platforms/android/app/build.gradle << 'EOF'
-
-android {
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
-    }
-}
-EOF
-
-          # Make gradlew executable
-          chmod +x platforms/android/gradlew
-
-      - name: Build with Cordova
-        run: |
-          # Set environment variable to use Java 11
-          export JAVA_HOME=/usr/lib/jvm/temurin-11-jdk-amd64
-          export PATH=$JAVA_HOME/bin:$PATH
-          
-          cordova build android --debug --verbose
+          echo "=== APK FILES ==="
+          ls -R platforms/android/app/build/outputs/apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: platforms/android/app/build/outputs/apk/debug/*.apk
+          path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
