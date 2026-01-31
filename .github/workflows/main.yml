@@ -17,9 +17,8 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 17 # JDK 17 is the requirement for modern Android builds
 
-      # FIX: Install the specific Build Tools and Platform version Cordova is asking for
       - name: Setup Android SDK
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2" "platforms;android-33"
@@ -35,13 +34,21 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Clear old platform data to ensure a clean build with the right tools
-      - name: Add Android platform
+      # This step forces the project to use a compatible Gradle version
+      # by updating the wrapper before the main build runs.
+      - name: Prepare Cordova Platform
         run: |
-          cordova platform add android || (cordova platform remove android && cordova platform add android)
+          cordova platform add android || true
+          cd platforms/android
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.7
 
       - name: Build Debug APK
-        run: cordova build android --verbose
+        # CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL forces Cordova to stop 
+        # using the system Gradle 9.3.0
+        env:
+          CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
+        run: cordova build android --verbose --device
 
       - name: Verify APK output
         run: |
