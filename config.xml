@@ -12,11 +12,10 @@
     <preference name="Fullscreen" value="false" />
     <allow-navigation href="*" />
     
-    <platform name="android">
-        <!-- Use single icon first to avoid errors -->
+<platform name="android">
         <icon src="www/res/icon/android/darksystem.jpg" />
         
-        <config-file parent="/manifest" target="AndroidManifest.xml">
+        <config-file target="AndroidManifest.xml" parent="/*">
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
             <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
