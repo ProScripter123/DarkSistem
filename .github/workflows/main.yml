@@ -1,9 +1,8 @@
-name: Build Full Cordova App (Final Fix)
+name: Build Dark System APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build:
@@ -19,6 +18,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Install Android Build Tools
+        run: |
+          SDK_MANAGER=$(find $ANDROID_HOME -name sdkmanager | head -n 1)
+          echo "y" | $SDK_MANAGER --install "build-tools;33.0.2" "platforms;android-33"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -27,46 +31,31 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      # LANGKAH PENTING: Instal Build Tools yang diminta (33.0.2)
-      - name: Install Android Build Tools
+      - name: Prepare Project
         run: |
-          SDK_MANAGER=$(find $ANDROID_HOME -name sdkmanager | head -n 1)
-          echo "y" | $SDK_MANAGER --install "build-tools;33.0.2" "platforms;android-33"
-
-      - name: Prepare Project Files
-        run: |
+          # Hapus plugin whitelist yang bermasalah (sudah built-in di v12)
+          sed -i '/cordova-plugin-whitelist/d' config.xml
+          
+          # Buat folder www jika belum ada & pindahkan backend
           mkdir -p www
-          # Copy backend folder ke dalam www agar ikut masuk ke APK
           if [ -d "backend" ]; then cp -r backend www/; fi
-          npm install
-
-      - name: Add Android Platform
-        run: |
-          cordova platform add android
-          cordova plugin remove cordova-plugin-whitelist --silent || true
+          
+          cordova platform add android --nosave
+          cordova prepare android
 
       - name: Build Debug APK
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: https://services.gradle.org/distributions/gradle-8.7-bin.zip
         run: |
-          # 1. Download Gradle 8.7 manual untuk bypass sistem v9.3
+          # Bypass Gradle 9.3 sistem
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
           unzip -q /tmp/gradle-8.7-bin.zip -d /tmp/gradle-fixed
           export PATH=/tmp/gradle-fixed/gradle-8.7/bin:$PATH
           
-          # 2. Set environment variable agar Gradle tahu lokasi SDK
-          export ANDROID_HOME=$ANDROID_HOME
-          
-          # 3. Jalankan build
           cordova build android --verbose --device
 
-      - name: Verify and Upload APK
-        run: |
-          mkdir -p output
-          find platforms/android/app/build/outputs/apk/debug -name "*.apk" -exec cp {} output/app-debug.apk \;
-
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DarkSystem-Final-APK
-          path: output/app-debug.apk
+          name: DarkSystem-App
+          path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
